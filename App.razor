@@ -1,45 +1,362 @@
-﻿<!--
-    If you want to enable Blazor routing, you should remove all of this contents,
-    and uncomment the below line. (See also: https://docs.microsoft.com/en-us/aspnet/core/blazor/routing )
+﻿@using System;
+@using System.IO;
+@using System.Collections;
+@using System.Collections.Generic;
+@using System.Linq;
+@inject IJSRuntime JSRuntime;
+@inject IFileReaderService fileReaderService;
 
-<Router AppAssembly="@typeof(Program).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" />
-    </Found>
-    <NotFound>
-        <LayoutView>
-            <p>Sorry, there's nothing at this address.</p>
-        </LayoutView>
-    </NotFound>
-</Router>
 
--->
+<div class="container">
+    <div class="row">
+        @{
+            string paths = Common.GetDirParent(currentDir);
+            string[] exPaths = Common.ExtractDirPath(paths);
 
-<div style="text-align:center">
-    <h1>
-        Welcome to @Title!
-    </h1>
-    <img width="250" src="data:image/svg+xml;charset=utf8,%3Csvg%20id%3D%22Layer_1%22%20data-name%3D%22Layer%201%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cdefs%3E%3Cstyle%3E.cls-1%7Bfill%3A%235c2d91%3B%7D.cls-2%2C.cls-3%7Bfill%3A%23fff%3B%7D.cls-2%7Bopacity%3A0.1%3B%7D%3C%2Fstyle%3E%3C%2Fdefs%3E%3Ctitle%3Elogo_NET%3C%2Ftitle%3E%3Ccircle%20class%3D%22cls-1%22%20cx%3D%2232%22%20cy%3D%2232%22%20r%3D%2232%22%2F%3E%3Cpath%20class%3D%22cls-2%22%20d%3D%22M9.82%2C9A32%2C32%2C0%2C1%2C0%2C55%2C54.18Z%22%2F%3E%3Cpath%20class%3D%22cls-3%22%20d%3D%22M7.4%2C41.25a1.35%2C1.35%2C0%2C0%2C1-1-.42%2C1.38%2C1.38%2C0%2C0%2C1-.41-1%2C1.4%2C1.4%2C0%2C0%2C1%2C.41-1%2C1.34%2C1.34%2C0%2C0%2C1%2C1-.43%2C1.37%2C1.37%2C0%2C0%2C1%2C1%2C.43%2C1.39%2C1.39%2C0%2C0%2C1%2C.42%2C1%2C1.37%2C1.37%2C0%2C0%2C1-.42%2C1A1.38%2C1.38%2C0%2C0%2C1%2C7.4%2C41.25Z%22%2F%3E%3Cpath%20class%3D%22cls-3%22%20d%3D%22M27.27%2C41H24.65L15.28%2C26.46a6.06%2C6.06%2C0%2C0%2C1-.58-1.14h-.08a18.71%2C18.71%2C0%2C0%2C1%2C.1%2C2.5V41H12.59V22.77h2.77l9.12%2C14.28q.57.89.74%2C1.22h.05a19.29%2C19.29%2C0%2C0%2C1-.13-2.68V22.77h2.13Z%22%2F%3E%3Cpath%20class%3D%22cls-3%22%20d%3D%22M41.69%2C41H32V22.77h9.24V24.7H34.18v6.06h6.58v1.92H34.18V39h7.52Z%22%2F%3E%3Cpath%20class%3D%22cls-3%22%20d%3D%22M56%2C24.7H50.7V41H48.57V24.7H43.33V22.77H56Z%22%2F%3E%3C%2Fsvg%3E" style="margin: 25px;">
+            <div class="col-md-12" style="margin-bottom:100px;">
+                <p>
+                    Current Directory Path : @currentDir
+                </p>
+
+                @if (exPaths != null && exPaths.Length > 0)
+                {
+                    string currentBack = "/";
+                    for(int i = 0 ; i < exPaths.Length-1 ; ++i)
+                    {
+                        currentBack = exPaths[i];
+                    }
+
+                    <p>
+                        <a href="javascript:$;" @onclick="@(() => SetCurrentDir(currentBack))">
+                            @((MarkupString)TypeToImg("DIRECTORY"))
+                            ..
+                        </a>
+                    </p>
+                }
+
+                <p>
+                    <img src="create_new_folder-24px.svg" style="width:24px;height:24px;">
+                    <input type="text" @bind-value="newFolderName">
+                    <a href="javascript:$;" @onclick="@(() => CreateNewFolder())">
+                        New Folder
+                    </a>
+                </p>
+
+                @if (listDir != null && listDir.Length > 0)
+                {
+                    foreach(var i in listDir)
+                    {
+                        string p = i.pathSuffix;
+                        if(currentDir != "/")
+                        {
+                            p = "/" + p;
+                        }
+
+                        <p>
+                            @switch(i.type)
+                            {
+                                case "DIRECTORY":
+                                {
+                                    <a href="javascript:$;" @onclick="@(() => SetCurrentDir(currentDir + p))">
+                                        @((MarkupString)TypeToImg(i.type))
+                                        @i.pathSuffix
+                                    </a>
+                                }
+                                break;
+
+                                default:
+                                {
+                                    @((MarkupString)TypeToImg(i.type))
+                                    <span>
+                                        @i.pathSuffix
+                                    </span>
+                                }
+                                break;
+                            }
+
+                            <a href="javascript:$;" @onclick="@(() => DeletePath(currentDir + p))">
+                                <img src="delete-24px.svg" style="width:24px;height:24px;">
+                            </a>
+                        </p>
+                    }
+                }
+
+
+                <h4>Upload</h4>
+
+                AutoUpload : <input type="checkbox" @onchange="OnAutoUploadChange" disabled="@isUploading">
+
+                <div class="drag-drop-zone">
+                    <p>Drag & Drop file here</p>
+                    <input multiple type="file" @ref="inputTypeFileElement" @onchange="InputFileChange" disabled="@isUploading" />
+                </div>
+
+                @if(allFiles != null)
+                {
+                    foreach(var file in allFiles)
+                    {
+                        <div class="border border-secondary p-3">
+                            <p>Name: @file.fileInfo.Name</p>
+                            <p>Size in bytes: @file.fileInfo.Size</p>
+                            <p>Last modified date: @file.fileInfo.LastModified</p>
+                            <p>Content type: @file.fileInfo.Type</p>
+                            <button @onclick="@(e => DeleteFile(file))" disabled="@isUploading">Delete</button>
+                        </div>
+                    }
+                }
+
+                <p>@status</p>
+                <button @onclick="Upload" disabled="@isUploading">Upload</button>
+
+            </div>
+        }
+    </div>
 </div>
-<h2>Here are some links to help you start: </h2>
-<ul>
-    <li>
-        <h2><a target="_blank" href="https://blazor.net">Blazor docs website</a></h2>
-    </li>
-    <li>
-        <h2><a target="_blank" href="https://github.com/AdrienTorris/awesome-blazor#awesome-blazor-">Awesome Blazor</a></h2>
-    </li>
-    <li>
-        <h2>
-            Please take our
-            <a target="_blank" href="https://go.microsoft.com/fwlink/?linkid=2109206">
-                brief survey
-            </a>
-            and tell us what you think.
-        </h2>
-    </li>
-</ul>
 
 @code {
-    string Title = "Blazor";
+    const string hadoopURL = "http://192.168.1.15:9870/";
+    const int hadoopRetryUpload = 3;
+    readonly string[,] hadoopUrlSwitch = { {"raspberrypi:9864", "192.168.1.15:9864"} };
+
+    ElementReference inputTypeFileElement;
+    
+
+    bool isLoading = false;
+    HDFSResponse.FileStatus[] listDir = null;
+    string currentDir = "/";
+    string newFolderName = "";
+    string status = "";
+    bool isUploading = false;
+    bool isAutoUpload = false;
+    FileUpload[] allFiles = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrentDir();
+    }
+
+    class FileUpload
+    {
+        public IFileReference fileReference;
+        public IFileInfo fileInfo;
+    }
+
+    void OnAutoUploadChange(ChangeEventArgs e)
+    {
+        isAutoUpload = (bool)e.Value;
+        allFiles = null;
+        StateHasChanged();
+    }
+
+    void DeleteFile(FileUpload file)
+    {
+        List<FileUpload> list = allFiles.ToList();
+        list.RemoveAll(x => x == file);
+        allFiles = list.ToArray();
+
+        StateHasChanged();
+    }
+
+    public async Task InputFileChange(ChangeEventArgs e)
+    {
+        List<FileUpload> list = new List<FileUpload>();
+
+        foreach (var file in await fileReaderService.CreateReference(inputTypeFileElement).EnumerateFilesAsync())
+        {
+            var fileInfo = await file.ReadFileInfoAsync();
+
+            list.Add(new FileUpload(){ fileInfo = fileInfo, fileReference = file, });
+        }
+        
+        allFiles = list.ToArray();
+        StateHasChanged();
+
+        if(isAutoUpload)
+        {
+            await Upload();
+        }
+    }
+    
+    public async Task Upload()
+    {
+        isUploading = true;
+
+        if (allFiles != null)
+        {
+            List<HDFSResponse.FileStatus> list = new List<HDFSResponse.FileStatus>();
+            if (listDir != null && listDir.Length > 0) list.AddRange(listDir);
+
+            foreach (var file in allFiles)
+            {
+                using (Stream stream = await file.fileReference.OpenReadAsync())
+                {
+                    string filePathTemp = System.IO.Path.GetTempFileName();
+
+                    using(var fileStream = File.OpenWrite(filePathTemp))
+                    {
+                        await stream.CopyToAsyncWithCallback(fileStream, (long pos) => {
+                            status = $"Progress {pos}/{stream.Length} bytes from {file.fileInfo.Name}";
+                            StateHasChanged();
+                        });
+                    }
+
+                    string p = GetCurrentPath(file.fileInfo.Name);
+                    if (p != null && p.Length > 0 && p[0] == '/')
+                    {
+                        p = p.Remove(0, 1);
+                    }
+
+                    bool fileExists = list.Exists(x => x.pathSuffix == Path.GetFileName(p));
+                    if (fileExists) p += "+";
+
+                    List<KeyValuePair<string, string>> urlSwitch = new List<KeyValuePair<string, string>>();
+                    for(int i = 0 ; i < hadoopUrlSwitch.Length ; ++i)
+                    {
+                        urlSwitch.Add(new KeyValuePair<string, string>(hadoopUrlSwitch[i,0], hadoopUrlSwitch[i,1]));
+                    }
+
+                    //Console.WriteLine("PATH : " + p);
+                    byte[] fileBuffer = System.IO.File.ReadAllBytes(filePathTemp);
+                    bool upload = await HadoopAPI.UploadFile(hadoopURL, p, urlSwitch, fileBuffer);
+                    if (upload)
+                    {
+                        //Console.WriteLine("upload : " + upload);
+
+                        HDFSResponse.FileGetStatus fs = await HadoopAPI.FileStatus(hadoopURL, p);
+                        if (fs != null)
+                        {
+                            fs.fileStatus.pathSuffix = Path.GetFileName(p);
+                            //Console.WriteLine("fs : " + JsonConvert.SerializeObject(fs.fileStatus));
+                            list.Add(fs.fileStatus);
+                        }
+                    }
+
+                    File.Delete(filePathTemp);
+                }
+
+                DeleteFile(file);
+            }
+
+            listDir = list.ToArray();
+        }
+        
+
+        status = "Completed!";
+        isUploading = false;
+        StateHasChanged();
+    }
+
+    string GetCurrentPath(string dir)
+    {
+        if(currentDir == "/") return currentDir + dir;
+        return currentDir + "/" + dir;
+    }
+
+    async Task CreateNewFolder()
+    {
+        if(newFolderName != "")
+        {
+            string p = GetCurrentPath(newFolderName);
+            if (p != null && p.Length > 0 && p[0] == '/')
+            {
+                p = p.Remove(0, 1);
+            }
+
+            //await JSRuntime.InvokeAsync<bool>("alert", GetCurrentPath(newFolderName));
+            bool create = await HadoopAPI.CreateFile(hadoopURL, p);
+            if (create)
+            {
+                await LoadCurrentDir();
+            }
+            newFolderName = "";
+            StateHasChanged();
+        }
+    }
+
+    async Task DeletePath(string path)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure?");
+        if (confirmed)
+        {
+            
+
+            //foreach(var i in listDir)
+            //{
+            //    await JSRuntime.InvokeAsync<bool>("alert", GetCurrentPath(i.pathSuffix) + " == " + path);
+            //}
+
+            //call hadoop
+            bool delete = await HadoopAPI.DeleteFile(hadoopURL, path);
+            if(delete)
+            {
+                var list = new List<HDFSResponse.FileStatus>();
+                list.AddRange(listDir);
+                list.RemoveAll(x => GetCurrentPath(x.pathSuffix) == path);
+                listDir = list.ToArray();
+
+                StateHasChanged();
+            }
+        }
+    }
+
+    async Task LoadCurrentDir()
+    {
+        /*
+        isLoading = true;
+        listDir = null;
+        StateHasChanged();
+
+        List<HDFSResponse.FileStatus> list = new List<HDFSResponse.FileStatus>();
+        List<HDFSResponse.FileStatus> dirs = new List<HDFSResponse.FileStatus>()
+                                    , ff = new List<HDFSResponse.FileStatus>();
+                                        */
+        HDFSResponse.FileStatus[] files = await HadoopAPI.GetFileList(hadoopURL, currentDir);
+        /*
+        if (files != null && files.Length > 0)
+        {
+            foreach(var i in files)
+            {
+                if (i.type == "DIRECTORY") dirs.Add(i);
+                else ff.Add(i);
+            }
+        }
+        
+        foreach(var i in dirs)
+        {
+            list.Add(i);
+        }
+
+        foreach(var i in ff)
+        {
+            list.Add(i);
+        }
+
+        listDir = list.ToArray();
+
+        isLoading = false;
+        StateHasChanged();
+        */
+    }
+
+    async Task SetCurrentDir(string dir)
+    {
+        currentDir = dir;
+        StateHasChanged();
+
+        await LoadCurrentDir();
+    }
+
+    string TypeToImg(string type)
+    {
+        switch(type)
+        {
+            case "FILE":
+                return "<img src=\"insert_drive_file-24px.svg\" style=\"width:24px;height:24px;\">";
+            
+            case "DIRECTORY":
+                return "<img src=\"folder-24px.svg\" style=\"width:24px;height:24px;\">";
+        }
+
+        return type;
+    }
 }
